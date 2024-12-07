@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.email }}'s Appointments{% endblock %}
+
+{% block extra_css %}
+<link href='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.css' rel='stylesheet' />
+<link href='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.css' rel='stylesheet' />
+<link href='https://cdn.jsdelivr.net/npm/@fullcalendar/timegrid@6.1.8/main.min.css' rel='stylesheet' />
+<style>
+.fc-event {
+    cursor: pointer;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>{{ user.email }}'s Appointments</h2>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h4>Calendar View</h4>
+                </div>
+                <div class="card-body">
+                    <div id="calendar"></div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h4>List View</h4>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for apt in appointments %}
+                                <tr>
+                                    <td>{{ apt.title }}</td>
+                                    <td>{{ apt.start_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>{{ apt.end_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="editAppointment({{ apt.id }})">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteAppointment({{ apt.id }})">Delete</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Appointment Modal -->
+<div class="modal fade" id="editAppointmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Appointment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editAppointmentForm">
+                    <input type="hidden" id="editAppointmentId">
+                    <div class="mb-3">
+                        <label for="editTitle" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="editTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editDate" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="editDate" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editStartTime" class="form-label">Start Time</label>
+                        <input type="time" class="form-control" id="editStartTime" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editDuration" class="form-label">Duration (minutes)</label>
+                        <input type="number" class="form-control" id="editDuration" value="30" min="15" max="480" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editDescription" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="saveEditedAppointment()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/timegrid@6.1.8/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/interaction@6.1.8/main.min.js'></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: [
+            {% for apt in appointments %}
+            {
+                id: {{ apt.id }},
+                title: '{{ apt.title }}',
+                start: '{{ apt.start_time.isoformat() }}',
+                end: '{{ apt.end_time.isoformat() }}',
+                description: '{{ apt.description|default("", true) }}'
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ],
+        eventTimeFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        },
+        slotMinTime: '08:00:00',
+        slotMaxTime: '20:00:00',
+        editable: true,
+        eventClick: function(info) {
+            editAppointment(info.event.id);
+        }
+    });
+    calendar.render();
+});
+
+function editAppointment(appointmentId) {
+    fetch(`/api/appointments/${appointmentId}`)
+        .then(response => response.json())
+        .then(data => {
+            const startDate = new Date(data.start);
+            document.getElementById('editAppointmentId').value = data.id;
+            document.getElementById('editTitle').value = data.title;
+            document.getElementById('editDate').value = startDate.toISOString().split('T')[0];
+            document.getElementById('editStartTime').value = startDate.toTimeString().slice(0, 5);
+            document.getElementById('editDescription').value = data.description;
+            
+            // Calculate duration in minutes
+            const endDate = new Date(data.end);
+            const duration = (endDate - startDate) / (1000 * 60);
+            document.getElementById('editDuration').value = duration;
+            
+            new bootstrap.Modal(document.getElementById('editAppointmentModal')).show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to load appointment details');
+        });
+}
+
+function saveEditedAppointment() {
+    const appointmentId = document.getElementById('editAppointmentId').value;
+    const title = document.getElementById('editTitle').value;
+    const date = document.getElementById('editDate').value;
+    const startTime = document.getElementById('editStartTime').value;
+    const duration = parseInt(document.getElementById('editDuration').value);
+    const description = document.getElementById('editDescription').value;
+
+    const startDateTime = new Date(date + 'T' + startTime);
+    const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
+
+    const data = {
+        title: title,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
+        description: description
+    };
+
+    fetch(`/api/appointments/${appointmentId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert('Appointment updated successfully');
+        location.reload();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to update appointment');
+    });
+}
+
+function deleteAppointment(appointmentId) {
+    if (confirm('Are you sure you want to delete this appointment?')) {
+        fetch(`/api/appointments/${appointmentId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            location.reload();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to delete appointment');
+        });
+    }
+}
+</script>
+{% endblock %}

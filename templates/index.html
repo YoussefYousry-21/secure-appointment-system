@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 text-center">
+        <h1 class="display-4 mb-4">Welcome to Secure Appointment System</h1>
+        {% if not current_user.is_authenticated %}
+        <p class="lead">Please login or register to manage your appointments.</p>
+        <div class="mt-4">
+            <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg mx-2">Login</a>
+            <a href="{{ url_for('register') }}" class="btn btn-success btn-lg mx-2">Register</a>
+        </div>
+        {% else %}
+        <p class="lead">Welcome back, {{ current_user.email }}!</p>
+        <div class="mt-4">
+            <a href="{{ url_for('appointments') }}" class="btn btn-primary btn-lg">View My Appointments</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
